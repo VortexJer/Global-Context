@@ -12,6 +12,9 @@ authors = [
     {name = "Global Context Contributors"}
 ]
 requires-python = ">=3.8"
+dependencies = [
+    "filelock>=3.0",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -24,8 +27,8 @@ classifiers = [
 globalcontext = "globalcontext.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/YOUR_USER/globalcontext"
-Repository = "https://github.com/YOUR_USER/globalcontext"
+Homepage = "https://github.com/VortexJer/Global-Context"
+Repository = "https://github.com/VortexJer/Global-Context"
 
 [tool.setuptools.packages.find]
 where = ["."]

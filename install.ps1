@@ -1,10 +1,10 @@
 # Global Context installer for Windows PowerShell.
 # Usage:
-#   irm https://raw.githubusercontent.com/YOUR_USER/globalcontext/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/VortexJer/Global-Context/main/install.ps1 | iex
 #   irm ... | iex; install-globalcontext -Ai all
 
 param(
-    [string]$Repo = "YOUR_USER/globalcontext",
+    [string]$Repo = "VortexJer/Global-Context",
     [string]$Branch = "main",
     [string]$InstallDir = "$env:USERPROFILE\.globalcontext",
     [string]$Ai = ""

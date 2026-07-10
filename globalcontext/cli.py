@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 from . import __version__, DEFAULT_CONTEXT_NAME
+from .checkpoint import checkpoint, checkpoint_complete, recover
 from .context import append_entry, init_context, read_context
 from .integrations.claude import ClaudeIntegration
 from .integrations.codex import CodexIntegration
@@ -44,6 +45,38 @@ def cmd_append(args):
     text = source.read_text(encoding="utf-8")
     path = append_entry(text, label=args.label)
     print(f"Appended to {path}")
+
+
+def cmd_checkpoint(args):
+    ctx = Path(args.context) if args.context else None
+    marker = checkpoint(ctx, ai=args.ai, summary=args.summary or "")
+    print(f"Checkpoint created: {marker}")
+
+
+def cmd_checkpoint_complete(args):
+    ctx = Path(args.context) if args.context else None
+    path = checkpoint_complete(
+        ctx,
+        ai=args.ai,
+        text=args.text or "",
+        clear_only=args.clear_only,
+    )
+    if args.clear_only or not args.text:
+        print(f"Checkpoint cleared: {path}")
+    else:
+        print(f"Checkpoint complete: {path}")
+
+
+def cmd_recover(args):
+    ctx = Path(args.context) if args.context else None
+    recovered = recover(ctx, dry_run=args.dry_run)
+    if not recovered:
+        print("No stale pending checkpoints found.")
+        return
+    action = "Would recover" if args.dry_run else "Recovered"
+    print(f"{action} {len(recovered)} checkpoint(s):")
+    for marker in recovered:
+        print(f"  {marker}")
 
 
 def cmd_sync(args):
@@ -229,6 +262,21 @@ def main(argv=None):
     p_append.add_argument("source", help="File to append")
     p_append.add_argument("--label", default="Session", help="Entry label, e.g. Kimi, Claude")
 
+    p_checkpoint = sub.add_parser("checkpoint", help="Mark a pending context update before an AI response")
+    p_checkpoint.add_argument("--context", help="Path to .globalcontext.md (default: active context)")
+    p_checkpoint.add_argument("--ai", default="AI", help="AI assistant name, e.g. Claude, Kimi")
+    p_checkpoint.add_argument("--summary", default="", help="Short summary of the planned update")
+
+    p_checkpoint_complete = sub.add_parser("checkpoint-complete", help="Append summary and clear the pending checkpoint")
+    p_checkpoint_complete.add_argument("--context", help="Path to .globalcontext.md (default: active context)")
+    p_checkpoint_complete.add_argument("--ai", default="AI", help="AI assistant name, e.g. Claude, Kimi")
+    p_checkpoint_complete.add_argument("--text", default="", help="Summary text to append as a new entry")
+    p_checkpoint_complete.add_argument("--clear-only", action="store_true", help="Only remove the pending marker")
+
+    p_recover = sub.add_parser("recover", help="Consolidate stale pending checkpoints")
+    p_recover.add_argument("--context", help="Path to .globalcontext.md (default: scan all known contexts)")
+    p_recover.add_argument("--dry-run", action="store_true", help="Show what would be recovered without changing files")
+
     p_sync = sub.add_parser("sync", help="Manual sync helper")
 
     p_register = sub.add_parser("register", help="Register a project name to a directory")
@@ -263,6 +311,9 @@ def main(argv=None):
         "init": cmd_init,
         "status": cmd_status,
         "append": cmd_append,
+        "checkpoint": cmd_checkpoint,
+        "checkpoint-complete": cmd_checkpoint_complete,
+        "recover": cmd_recover,
         "sync": cmd_sync,
         "register": cmd_register,
         "unregister": cmd_unregister,

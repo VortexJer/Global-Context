@@ -4,6 +4,8 @@ Share context across terminal AI coding assistants: **Claude Code**, **Kimi Code
 
 When you switch from one AI to another, you lose the conversation thread. Global Context solves this by keeping a single Markdown file in each project that every AI can read and update.
 
+![Demo: Claude Code writes context, Gemini CLI continues it](docs/demo.gif)
+
 ---
 
 ## Supported AI assistants
@@ -23,31 +25,31 @@ When you switch from one AI to another, you lose the conversation thread. Global
 ### macOS / Linux / Git Bash on Windows
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_USER/globalcontext/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/VortexJer/Global-Context/main/install.sh | bash
 ```
 
 Install for all detected AIs without prompting:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_USER/globalcontext/main/install.sh | bash -s -- --ai all
+curl -fsSL https://raw.githubusercontent.com/VortexJer/Global-Context/main/install.sh | bash -s -- --ai all
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/YOUR_USER/globalcontext/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/VortexJer/Global-Context/main/install.ps1 | iex
 ```
 
 Install for all AIs:
 
 ```powershell
-irm https://raw.githubusercontent.com/YOUR_USER/globalcontext/main/install.ps1 | iex; install-globalcontext -Ai all
+irm https://raw.githubusercontent.com/VortexJer/Global-Context/main/install.ps1 | iex; install-globalcontext -Ai all
 ```
 
 ### Local install (for development)
 
 ```bash
-git clone https://github.com/YOUR_USER/globalcontext.git
+git clone https://github.com/VortexJer/Global-Context.git
 cd globalcontext
 ./install.sh --local
 ```
@@ -107,6 +109,13 @@ globalcontext resolve <name-or-path>   # Get/create the context file for a proje
 globalcontext install               # Install AI integrations (interactive)
 globalcontext install --ai all      # Install all integrations
 globalcontext doctor                # Check installation status
+
+# Checkpoint / recover (reliable context updates)
+globalcontext checkpoint            # Mark a pending update before an AI response
+globalcontext checkpoint-complete   # Append summary and clear the pending marker
+globalcontext recover               # Consolidate stale pending checkpoints
+globalcontext recover --dry-run     # Preview what would be recovered
+
 globalcontext --version             # Show version
 ```
 
@@ -165,11 +174,33 @@ Shared context for terminal AI assistants.
 
 ---
 
+## Reliability & recovery
+
+Global Context now uses a **checkpoint/recover** mechanism so updates are not lost if a session is interrupted.
+
+| AI | Per-turn native save | Pending flag + recovery |
+|---|---|---|
+| Claude Code | ✅ Yes — hooks create a `.globalcontext.pending` marker before each response and clear it on `Stop`. | ✅ Automatic on next `SessionStart` |
+| Kimi Code CLI | ⚠️ No native hook — skill instructs the model to checkpoint before/after each response. | ✅ Automatic on next session start |
+| OpenAI Codex CLI | ⚠️ No native hook — skill instructs the model to checkpoint before/after each response. | ✅ Automatic on next session start |
+| Google Gemini CLI | ⚠️ No native hook — skill instructs the model to checkpoint before/after each response. | ✅ Automatic on next session start |
+
+How it works:
+
+1. Before an assistant response, a `.globalcontext.pending` marker is written next to `.globalcontext.md`.
+2. When the response finishes and the summary is written, the marker is deleted.
+3. If the response is cut off (crash, Ctrl+C, network error, credit limit, power loss), the marker stays on disk.
+4. On the next session start, `globalcontext recover` checks for stale markers and appends a `Recovery` entry so the next AI knows the previous turn was interrupted.
+
+The marker is a plain file, so it survives reboots and does not depend on any running process.
+
+---
+
 ## Limitations
 
 - **No native session sync**: Global Context cannot make a Claude session appear inside Kimi or vice versa. It keeps a shared Markdown journal instead.
-- **Auto-update depends on the AI**: Claude, Kimi and Codex are instructed to update the file, but they decide when to do so. For other AIs, the user must load the file manually.
-- **Large contexts**: If the file grows too large, add a `## Compacted Summary` section and archive old details.
+- **Skill-based checkpointing**: Kimi, Codex and Gemini rely on the model following the checkpoint instructions. Claude Code additionally has native hooks that enforce the marker lifecycle.
+- **Large contexts**: If the file grows too large, add a `## Compacted Summary` section and archive old details. See [FORMAT.md](FORMAT.md) for the full spec.
 
 ---
 

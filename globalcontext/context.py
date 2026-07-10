@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 from typing import Iterable
 
+from .lock import locked
 from .utils import find_context_file, get_context_path, now_str
 
 
@@ -18,8 +19,9 @@ def append_entry(text: str, label: str = "Session", cwd: Path | None = None) -> 
     """Append a new entry to the active context file."""
     path = get_context_path(cwd, create=True)
     entry = f"\n\n## {label} — {now_str()}\n\n{text.strip()}\n\n---\n"
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(entry)
+    with locked(path, timeout=10.0):
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(entry)
     return path
 
 

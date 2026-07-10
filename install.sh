@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Global Context installer for macOS, Linux and Git Bash on Windows.
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/YOUR_USER/globalcontext/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/VortexJer/Global-Context/main/install.sh | bash
 #   curl -fsSL ... | bash -s -- --ai all
 
 set -euo pipefail
 
-REPO="${GC_REPO:-YOUR_USER/globalcontext}"
+REPO="${GC_REPO:-VortexJer/Global-Context}"
 BRANCH="${GC_BRANCH:-main}"
 
 # Use Python to get the home directory in a cross-platform way (matches Path.home())

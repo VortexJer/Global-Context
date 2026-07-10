@@ -36,8 +36,9 @@ Each project has a `.globalcontext.md` file inside its project directory. Projec
 
 - Treat the resolved project directory as the working directory for that session.
 - Read the `.globalcontext.md` and keep it in mind.
-- If the user says things like *"continue what I did with Claude"*, *"continue the Codex work"*, or *"remember when we..."*, consult the resolved `.globalcontext.md`.
-- After completing a significant task or at session end, append **one concise project-state entry** to the resolved `.globalcontext.md` using the prefix `Kimi:` and the current UTC date/time.
+- At the start of the session, run `globalcontext recover` to consolidate any stale pending checkpoints.
+- Before each assistant response, run `globalcontext checkpoint` against the resolved `.globalcontext.md` to create a pending marker.
+- After completing a significant task or at session end, append **one concise project-state entry** to the resolved `.globalcontext.md` using the prefix `Kimi:` and the current UTC date/time, then run `globalcontext checkpoint-complete --clear-only` to remove the pending marker.
 - Each entry must be 3–8 bullet points covering: what changed, key files touched, how to run/test/use the current state, and any pending blockers.
 - Do NOT paste conversation transcripts into the context file.
 - Use the `Write` or `Edit` tool to modify the file. Never corrupt it.

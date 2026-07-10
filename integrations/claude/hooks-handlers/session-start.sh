@@ -54,6 +54,13 @@ This is a **project state log** (a hand-off journal), NOT a chat transcript. Eac
 """
     context_file.write_text(header, encoding="utf-8")
 
+# Recover any stale pending checkpoints before loading context.
+import subprocess
+subprocess.run(
+    ["globalcontext", "recover", "--context", str(context_file)],
+    capture_output=True,
+)
+
 content = context_file.read_text(encoding="utf-8")
 
 additional_context = (
@@ -65,18 +72,19 @@ additional_context = (
     "---\\n\\n"
     "Instructions for this session:\\n"
     "1. Read and remember the shared context above.\\n"
-    "2. If the user asks to continue work started in another AI, reference this file.\\n"
-    "3. If the user mentions a project by name or path (e.g. 'open project graphify'), "
+    "2. On session start, Global Context has already run `globalcontext recover` to consolidate any stale pending checkpoints.\\n"
+    "3. Claude Code hooks automatically create a `.globalcontext.pending` marker before each response and clear it when the response completes successfully. If a response is cut off (crash, Ctrl+C, API error, credits), the marker persists.\\n"
+    "4. If the user mentions a project by name or path (e.g. 'open project graphify'), "
     "run `globalcontext resolve <name-or-path>` to find or create the correct `.globalcontext.md`. "
-    "Use that resolved file instead of the current directory one.\\n"
-    "4. If the user proposes a new project without a path (e.g. 'let's build a calculator'), "
+    "Use that resolved file instead of the current directory one, and run the corresponding checkpoint commands against the resolved path.\\n"
+    "5. If the user proposes a new project without a path (e.g. 'let's build a calculator'), "
     "automatically run `globalcontext new <project-name>` to create the project directory under "
     "`~/GlobalContext-Projects/`, register it, and create its `.globalcontext.md`.\\n"
-    "5. You can register a project name with `globalcontext register <name> <path>`.\\n"
-    "6. After making significant changes, append ONE concise project-state entry to the resolved `.globalcontext.md` using the prefix `Claude:`.\\n"
+    "6. You can register a project name with `globalcontext register <name> <path>`.\\n"
+    "7. After making significant changes, append ONE concise project-state entry to the resolved `.globalcontext.md` using the prefix `Claude:`.\\n"
     "   This is a hand-off log, NOT a chat transcript. Use 3–8 bullets covering: what changed, key files touched, how to run/test the current state, and any pending blockers.\\n"
-    "7. Do NOT paste conversation text into the context file.\\n"
-    "8. Do not delete old entries unless the user asks."
+    "8. Do NOT paste conversation text into the context file.\\n"
+    "9. Do not delete old entries unless the user asks."
 )
 
 output = {
