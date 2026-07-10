@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Global Context CLI wrapper for Unix-like shells.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 "$SCRIPT_DIR/globalcontext.py" "$@"

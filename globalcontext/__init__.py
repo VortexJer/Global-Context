@@ -1,0 +1,5 @@
+"""Global Context — share context across terminal AI coding assistants."""
+__version__ = "0.1.0"
+DEFAULT_CONTEXT_NAME = ".globalcontext.md"
+LEGACY_CONTEXT_NAME = ".ai-shared-context.md"
+GLOBAL_CONTEXT_DIR = ".globalcontext"
