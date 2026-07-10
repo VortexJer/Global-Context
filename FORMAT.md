@@ -10,6 +10,7 @@ This document defines the exact structure of `.globalcontext.md` so that multipl
 - **Location:** in the project root directory.
 - **Resolution:** `globalcontext resolve <name-or-path>` walks up from the current working directory or looks up a registered project name, then returns the path to the context file.
 - **Legacy alias:** `.ai-shared-context.md` is supported for reading but new projects should use `.globalcontext.md`.
+- **Auto-created project folders:** When an AI creates a project with `globalcontext new <name>`, the folder under `~/GlobalContext-Projects/` is named `<name>--<path-suffix>/`. The suffix is derived from the project path (drive + parent directory) to avoid collisions between projects with the same name and make the folder easy to locate.
 
 ---
 

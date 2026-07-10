@@ -81,7 +81,7 @@ cd globalcontext
    globalcontext new calculator
    ```
 
-   This creates `~/GlobalContext-Projects/calculator/.globalcontext.md` automatically.
+   This creates `~/GlobalContext-Projects/calculator--<path-suffix>/.globalcontext.md` automatically. The folder suffix is derived from the project path to avoid collisions.
 
 5. When you finish a task, the AI appends a summary to the resolved `.globalcontext.md`.
 6. Switch AI tools and continue — the context is already there.

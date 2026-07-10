@@ -103,13 +103,17 @@ def create_project(name: str, project_dir: str | Path | None = None) -> Path:
     """Create a new project directory, register it, and create its context file.
 
     If project_dir is not provided, creates the project under the default
-    GlobalContext-Projects directory.
+    GlobalContext-Projects directory. The folder name includes a path-derived
+    suffix so projects with the same name at different locations do not collide
+    and are easy to locate.
     """
     from .utils import _default_header
 
     if project_dir is None:
         base = default_projects_dir()
-        project_dir = base / _sanitize(name)
+        # Use a temporary path to derive the suffix, then create the real folder.
+        candidate = base / _sanitize(name)
+        project_dir = base / _folder_name_for_project(name, candidate)
     else:
         project_dir = Path(project_dir).resolve()
 
@@ -129,8 +133,35 @@ def create_project(name: str, project_dir: str | Path | None = None) -> Path:
 
 
 def _sanitize(name: str) -> str:
-    """Sanitize a project name for use as a directory name."""
+    """Sanitize a string for use as a directory name component."""
     import re
     safe = re.sub(r"[^\w\s-]", "", name, flags=re.UNICODE)
     safe = re.sub(r"[-\s]+", "-", safe).strip("-")
     return safe or "project"
+
+
+def _folder_name_for_project(name: str, project_dir: Path) -> str:
+    """Return a folder name that includes the project name and path info.
+
+    Format: <name>--<drive>-<parent>
+    Examples:
+      C:\\StudyFlow          -> studyflow--c-studyflow
+      C:\\Users\\foo\\Projects\\calc -> calc--c-projects
+      ~/GlobalContext-Projects/calc -> calc--c-globalcontext-projects
+    """
+    resolved = project_dir.resolve()
+    base = _sanitize(name)
+
+    drive = resolved.drive.rstrip(":").lower() if resolved.drive else ""
+    parent_name = _sanitize(resolved.parent.name) if resolved.parent.name else ""
+
+    suffix_parts = [p for p in (drive, parent_name) if p]
+    if not suffix_parts:
+        return base
+
+    # Avoid redundant name--c-name when parent equals name.
+    if parent_name.lower() == base.lower() and len(suffix_parts) == 2:
+        suffix_parts = [drive]
+
+    suffix = "-".join(suffix_parts)
+    return f"{base}--{suffix}"

@@ -29,7 +29,7 @@ Each project has a `.globalcontext.md` file inside its project directory. Projec
    ```bash
    globalcontext new <nombre-del-proyecto>
    ```
-   This creates the project under `~/GlobalContext-Projects/<nombre>/`, registers it, and creates `.globalcontext.md`.
+   This creates the project under `~/GlobalContext-Projects/<nombre>--<ruta>/` (the folder name includes the project name plus a path-derived suffix to avoid collisions and make it easy to find), registers it, and creates `.globalcontext.md`.
 5. If no project is specified, fall back to the current directory.
 
 ## During the session

@@ -17,6 +17,16 @@ This project uses `.globalcontext.md` to share context across terminal AI assist
 
 If the context file does not exist, `globalcontext resolve` creates it automatically.
 
+## Creating a new project
+
+If the user proposes a new project without a path (e.g. "let's build a calculator"), run:
+
+```bash
+globalcontext new <name>
+```
+
+This creates `~/GlobalContext-Projects/<name>--<path-suffix>/` (name plus a path-derived suffix to avoid collisions), registers it, and creates `.globalcontext.md`.
+
 ## During the session
 
 - Treat the resolved project directory as the working directory.
