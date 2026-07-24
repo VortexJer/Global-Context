@@ -31,19 +31,51 @@ def _legacy_plugin_dir() -> Path:
     return Path.home() / ".claude" / "plugins" / "globalcontext"
 
 
+def _short_path(p: Path) -> str:
+    """Return the Windows 8.3 short path (no spaces) for `p`, or str(p).
+
+    Using a space-free launcher path is critical: Claude runs the hook via
+    `cmd /c <command>`, and cmd strips the outer quotes when a command both
+    starts and ends with a quote — turning a quoted `"C:\\Users\\Joaquin ERE\\..."`
+    into the broken token `C:\\Users\\Joaquin`. A short path has no spaces, so it
+    needs no quotes and survives that stripping.
+    """
+    s = str(p)
+    if os.name != "nt":
+        return s
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        fn = ctypes.windll.kernel32.GetShortPathNameW
+        fn.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+        fn.restype = wintypes.DWORD
+        buf = ctypes.create_unicode_buffer(1024)
+        if fn(s, buf, 1024) and buf.value:
+            return buf.value
+    except Exception:
+        pass
+    return s
+
+
 def _launcher(gc_home: Path) -> str:
-    """Absolute path to the CLI launcher for the current OS."""
+    """CLI launcher path for the current OS (short/space-free on Windows)."""
     if os.name == "nt":
-        return str(gc_home / "bin" / "globalcontext.cmd")
+        return _short_path(gc_home / "bin" / "globalcontext.cmd")
     return str(gc_home / "bin" / "globalcontext")
 
 
+def _quote(launcher: str) -> str:
+    """Quote the launcher only if it contains a space (short paths do not)."""
+    return launcher if " " not in launcher else f'"{launcher}"'
+
+
 def _gc_hooks(gc_home: Path) -> dict:
-    launcher = _launcher(gc_home)
+    launcher = _quote(_launcher(gc_home))
     ctx = '"${CLAUDE_PROJECT_DIR}/.globalcontext.md"'
 
     def cmd(rest: str) -> dict:
-        return {"type": "command", "command": f'"{launcher}" {rest}'}
+        return {"type": "command", "command": f"{launcher} {rest}"}
 
     return {
         "SessionStart": [{"hooks": [cmd(f"session-start --context {ctx}")]}],

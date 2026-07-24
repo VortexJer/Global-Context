@@ -20,6 +20,13 @@ INTEGRATIONS = [ClaudeIntegration(), KimiIntegration(), CodexIntegration(), Gemi
 
 
 def _gc_home() -> Path:
+    # The install root is the directory that bundles this package together with
+    # the `integrations/` tree. Derive it from the package location so the CLI
+    # finds its integrations no matter where it was installed (not just the
+    # default ~/.globalcontext). Fall back to the conventional home otherwise.
+    root = Path(__file__).resolve().parent.parent
+    if (root / "integrations").exists():
+        return root
     return globalcontext_home()
 
 
