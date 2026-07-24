@@ -113,6 +113,14 @@ function globalcontext {
     Write-Host "Added globalcontext function to PowerShell profile: $PROFILE"
 }
 
+# Best-effort: install filelock for robust cross-process locking (the fallback
+# lockfile protocol races on Windows). Failure is non-fatal.
+try {
+    & $pyExe @pyPre -m pip install --quiet --disable-pip-version-check filelock
+} catch {
+    Write-Host "  (filelock not installed; using fallback lock)"
+}
+
 # Run AI integrations setup
 $globalcontext = Join-Path $binDir "globalcontext.py"
 if ($Ai) {

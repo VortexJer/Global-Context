@@ -113,9 +113,10 @@ def create_project(name: str, project_dir: str | Path | None = None) -> Path:
 
     if project_dir is None:
         base = default_projects_dir()
-        # Use a temporary path to derive the suffix, then create the real folder.
-        candidate = base / _sanitize(name)
-        project_dir = base / _folder_name_for_project(name, candidate)
+        # Derive the suffix from the directory where `new` was invoked (the
+        # meaningful locator), then ensure the folder name is unique.
+        folder = _folder_name_for_project(name, Path.cwd())
+        project_dir = _unique_dir(base, folder)
     else:
         project_dir = Path(project_dir).resolve()
 
@@ -142,28 +143,42 @@ def _sanitize(name: str) -> str:
     return safe or "project"
 
 
-def _folder_name_for_project(name: str, project_dir: Path) -> str:
-    """Return a folder name that includes the project name and path info.
+def _folder_name_for_project(name: str, source: Path) -> str:
+    """Return a folder name derived from `name` plus the source directory.
 
-    Format: <name>--<drive>-<parent>
-    Examples:
-      C:\\StudyFlow          -> studyflow--c-studyflow
-      C:\\Users\\foo\\Projects\\calc -> calc--c-projects
-      ~/GlobalContext-Projects/calc -> calc--c-globalcontext-projects
+    `source` is the directory the suffix is derived from — for auto-created
+    projects this is the current working directory, which is what actually
+    disambiguates two projects with the same name created from different places.
+
+    Format: <name>--<drive>-<source-folder>
+    Examples (source = cwd):
+      C:\\StudyFlow                 -> studyflow--c-studyflow
+      C:\\Users\\foo\\Projects       -> calc--c-projects
     """
-    resolved = project_dir.resolve()
+    resolved = Path(source).resolve()
     base = _sanitize(name)
 
     drive = resolved.drive.rstrip(":").lower() if resolved.drive else ""
-    parent_name = _sanitize(resolved.parent.name) if resolved.parent.name else ""
+    src_name = _sanitize(resolved.name) if resolved.name else ""
 
-    suffix_parts = [p for p in (drive, parent_name) if p]
+    suffix_parts = [p for p in (drive, src_name) if p]
     if not suffix_parts:
         return base
 
-    # Avoid redundant name--c-name when parent equals name.
-    if parent_name.lower() == base.lower() and len(suffix_parts) == 2:
+    # Avoid redundant name--c-name when the source folder equals the name.
+    if src_name.lower() == base.lower() and len(suffix_parts) == 2:
         suffix_parts = [drive]
 
     suffix = "-".join(suffix_parts)
     return f"{base}--{suffix}"
+
+
+def _unique_dir(base: Path, folder: str) -> Path:
+    """Return base/folder, or base/folder-2, -3, ... if it already exists."""
+    candidate = base / folder
+    if not candidate.exists():
+        return candidate
+    i = 2
+    while (base / f"{folder}-{i}").exists():
+        i += 1
+    return base / f"{folder}-{i}"

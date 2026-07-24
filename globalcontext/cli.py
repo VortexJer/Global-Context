@@ -125,6 +125,13 @@ def cmd_session_start(args):
                 legacy = context_file.parent / ".ai-shared-context.md"
                 if legacy.exists():
                     context_file = legacy
+                else:
+                    # Fall back to the nearest context walking up from cwd, so a
+                    # project opened via `resolve`/`new` (a different directory)
+                    # is still picked up instead of silently loading nothing.
+                    nearest = find_context_file()
+                    if nearest is not None:
+                        context_file = nearest
         else:
             context_file = find_context_file() or (Path.cwd() / DEFAULT_CONTEXT_NAME)
 
@@ -173,8 +180,13 @@ def cmd_session_start(args):
 
 
 def cmd_register(args):
+    new_path = str(Path(args.path).resolve())
+    existing = list_projects().get(args.name)
+    if existing and existing != new_path:
+        print(f"note: '{args.name}' was already registered to {existing}; overwriting.",
+              file=sys.stderr)
     path = register(args.name, args.path)
-    print(f"Registered '{args.name}' -> {Path(args.path).resolve()}")
+    print(f"Registered '{args.name}' -> {new_path}")
     print(f"Registry saved to: {path}")
 
 
@@ -197,6 +209,13 @@ def cmd_list(args):
 
 
 def cmd_resolve(args):
+    key = args.project
+    if key not in list_projects() and not Path(key).exists():
+        print(
+            f"note: '{key}' is not a registered project and that path does not "
+            f"exist — creating a new one. If this was a typo, see 'globalcontext list'.",
+            file=sys.stderr,
+        )
     context_file = resolve(args.project)
     print(context_file)
 
@@ -249,6 +268,10 @@ def cmd_uninstall(args):
     if "all" in selected:
         selected = [i.name for i in INTEGRATIONS]
 
+    if not selected:
+        print("No integrations selected; nothing to uninstall.", file=sys.stderr)
+        return
+
     for name in selected:
         integration = next((i for i in INTEGRATIONS if i.name == name), None)
         if not integration:
@@ -271,10 +294,14 @@ def cmd_disable(args):
 
 
 def cmd_doctor(args):
+    from .lock import _HAS_FILELOCK
+
     print(f"Global Context {__version__}")
     print(f"Status: {'DISABLED' if is_disabled() else 'enabled'}")
     print(f"GC home: {_gc_home()}")
     print(f"Active context: {find_context_file() or 'none'}")
+    lock_note = "filelock" if _HAS_FILELOCK else "fallback lockfile (run: pip install filelock)"
+    print(f"Lock backend: {lock_note}")
     print("\nAI integrations:")
     for i in INTEGRATIONS:
         detected = i.is_detected()

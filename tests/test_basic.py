@@ -225,6 +225,25 @@ def test_strip_gc_hooks_removes_ours_keeps_foreign():
     assert cmds == ["some-other-tool --foo"]
 
 
+def test_folder_name_derives_from_source_and_unique_dir():
+    from globalcontext.registry import _folder_name_for_project, _unique_dir
+
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "Projects"
+        src.mkdir()
+        folder = _folder_name_for_project("calc", src)
+        assert folder.startswith("calc--")
+        assert "projects" in folder.lower()   # suffix comes from the source dir
+
+        base = Path(tmp) / "base"
+        base.mkdir()
+        d1 = _unique_dir(base, "calc")
+        assert d1 == base / "calc"
+        d1.mkdir()
+        d2 = _unique_dir(base, "calc")        # collision -> counter
+        assert d2 == base / "calc-2"
+
+
 def test_disable_enable_marker_toggle():
     from unittest import mock
     from globalcontext.utils import is_disabled, set_disabled

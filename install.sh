@@ -160,6 +160,11 @@ globalcontext() {
     python3 "$BIN_DIR/globalcontext.py" "$@"
 }
 
+# Best-effort: install filelock for robust cross-process locking (the fallback
+# lockfile protocol races on Windows). Failure is non-fatal.
+"$GC_PY" -m pip install --quiet --disable-pip-version-check filelock >/dev/null 2>&1 \
+    || echo "Note: could not install filelock; using fallback lock." >&2
+
 # Run AI integrations setup
 if [[ -n "$SELECTED_AI" ]]; then
     globalcontext install --ai "$SELECTED_AI"
