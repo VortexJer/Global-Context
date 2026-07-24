@@ -70,18 +70,26 @@ def _quote(launcher: str) -> str:
     return launcher if " " not in launcher else f'"{launcher}"'
 
 
-def _gc_hooks(gc_home: Path) -> dict:
+def _gc_hooks(gc_home: Path, checkpoints: bool = False) -> dict:
+    """Hooks to install.
+
+    By default only `SessionStart` is installed — it loads the shared context
+    once per session and is silent. The per-turn marker lifecycle
+    (`UserPromptSubmit` + `Stop`) is opt-in via `checkpoints=True` because it
+    runs the CLI on every prompt and every response, which most users find
+    intrusive. Interrupted-turn recovery still runs at SessionStart.
+    """
     launcher = _quote(_launcher(gc_home))
     ctx = '"${CLAUDE_PROJECT_DIR}/.globalcontext.md"'
 
     def cmd(rest: str) -> dict:
         return {"type": "command", "command": f"{launcher} {rest}"}
 
-    return {
-        "SessionStart": [{"hooks": [cmd(f"session-start --context {ctx}")]}],
-        "UserPromptSubmit": [{"hooks": [cmd(f"checkpoint --context {ctx} --ai Claude --if-exists")]}],
-        "Stop": [{"hooks": [cmd(f"checkpoint-complete --context {ctx} --ai Claude --clear-only --if-exists")]}],
-    }
+    hooks = {"SessionStart": [{"hooks": [cmd(f"session-start --context {ctx}")]}]}
+    if checkpoints:
+        hooks["UserPromptSubmit"] = [{"hooks": [cmd(f"checkpoint --context {ctx} --ai Claude --if-exists")]}]
+        hooks["Stop"] = [{"hooks": [cmd(f"checkpoint-complete --context {ctx} --ai Claude --clear-only --if-exists")]}]
+    return hooks
 
 
 def _is_gc_command(entry: object) -> bool:

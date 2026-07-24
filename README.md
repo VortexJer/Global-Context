@@ -149,7 +149,7 @@ Global Context does **not** try to corrupt or rewrite internal AI session files.
 
 - Each project gets a `.globalcontext.md` file inside its own directory.
 - Projects can be registered with a friendly name (`globalcontext register <name> <path>`).
-- Claude Code loads the local context automatically via cross-platform hooks written to `~/.claude/settings.json` (`SessionStart` + a `checkpoint`/`Stop` marker lifecycle) and can resolve named projects on request. These hooks stay inert in projects that do not have a `.globalcontext.md`.
+- Claude Code loads the local context automatically via a cross-platform `SessionStart` hook written to `~/.claude/settings.json`, and can resolve named projects on request. By default this is the **only** hook installed — it runs once per session and is silent. The optional per-turn marker lifecycle (`UserPromptSubmit` + `Stop`) is opt-in, since it runs on every prompt and response. All hooks stay inert in projects without a `.globalcontext.md`.
 - Kimi Code CLI loads the local context via a skill and can resolve named projects by running `globalcontext resolve <name>`.
 - Codex loads the local context via a skill and can resolve named projects the same way.
 - Gemini CLI loads the local context via a skill and can resolve named projects the same way.
@@ -207,7 +207,7 @@ Global Context now uses a **checkpoint/recover** mechanism so updates are not lo
 | OpenAI Codex CLI | ⚠️ No native hook — the skill instructs the model to checkpoint before/after each response. | ✅ Automatic on next session start |
 | Google Gemini CLI | ⚠️ No native hook — the skill instructs the model to checkpoint before/after each response. | ✅ Automatic on next session start |
 
-> **Note:** No AI writes the summary entry from a hook. The `.globalcontext.md` entry itself is always written by the model following the skill/plugin instructions. Hooks only manage the pending marker so an interrupted turn can be detected and recovered.
+> **Note:** No AI writes the summary entry from a hook. The `.globalcontext.md` entry itself is always written by the model following the skill/plugin instructions. Hooks only manage the pending marker so an interrupted turn can be detected and recovered. For Claude Code the marker lifecycle is **opt-in** (default install is `SessionStart` only); the other AIs rely on the model following the checkpoint instructions.
 
 How it works:
 
