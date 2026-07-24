@@ -20,7 +20,8 @@ from .utils import find_context_file, get_context_path, globalcontext_home, now_
 
 PENDING_SUFFIX = ".pending"
 RECOVERY_LABEL = "Recovery"
-RECOVERY_STALE_SECONDS = 300  # 5 minutes
+RECOVERY_STALE_SECONDS = 900  # 15 minutes — long enough that a legitimately
+# slow turn is not mistaken for a crashed one by a concurrent session.
 
 
 def _pending_path(context_path: Path) -> Path:
@@ -38,37 +39,21 @@ def _marker_info(marker: Path) -> dict[str, Any] | None:
         return None
 
 
-def _is_process_alive(pid: int | None) -> bool:
-    """Return True if the given PID is alive."""
-    if pid is None or pid <= 0:
-        return False
-    try:
-        if os.name == "nt":
-            import ctypes  # noqa: PLC0415
-
-            kernel = ctypes.windll.kernel32
-            handle = kernel.OpenProcess(1, False, pid)
-            if not handle:
-                return False
-            kernel.CloseHandle(handle)
-            return True
-        else:
-            os.kill(pid, 0)
-            return True
-    except (OSError, ProcessLookupError):
-        return False
-
-
 def _is_stale(marker: Path, info: dict[str, Any] | None = None) -> bool:
-    """Return True if the marker is stale (old or owner dead)."""
+    """Return True if the marker is old enough to be considered abandoned.
+
+    Staleness is based purely on the marker's age. We deliberately do NOT use
+    the recorded PID: the process that writes the marker is a short-lived CLI
+    invocation (spawned by a hook) that exits immediately, so its PID is almost
+    always dead by the time ``recover`` runs. Trusting it would flag every
+    marker as stale and produce false "interrupted session" recoveries.
+    """
     if info is None:
         info = _marker_info(marker)
     if info is None:
         return True
-    pid = info.get("pid")
+
     started = info.get("started_at")
-    if not _is_process_alive(pid):
-        return True
     if started:
         try:
             started_dt = datetime.fromisoformat(started)
@@ -76,15 +61,31 @@ def _is_stale(marker: Path, info: dict[str, Any] | None = None) -> bool:
             return age > RECOVERY_STALE_SECONDS
         except Exception:
             return True
-    return False
+
+    # No usable timestamp in the marker: fall back to the file's mtime.
+    try:
+        age = datetime.now(timezone.utc).timestamp() - marker.stat().st_mtime
+        return age > RECOVERY_STALE_SECONDS
+    except OSError:
+        return True
 
 
-def checkpoint(context_path: Path | None = None, ai: str = "AI", summary: str = "") -> Path:
+def checkpoint(
+    context_path: Path | None = None,
+    ai: str = "AI",
+    summary: str = "",
+    if_exists: bool = False,
+) -> Path | None:
     """Write a pending-update marker before an AI response.
 
-    Returns the path to the marker file.
+    Returns the path to the marker file, or None if `if_exists` is set and the
+    context file does not exist yet (used by global hooks so they stay inert in
+    projects that do not use Global Context).
     """
-    path = (context_path or get_context_path(create=True)).resolve()
+    base = context_path or get_context_path(create=not if_exists)
+    path = Path(base).resolve()
+    if if_exists and not path.exists():
+        return None
     marker = _pending_path(path)
 
     with locked(path, timeout=10.0):
@@ -106,14 +107,19 @@ def checkpoint_complete(
     ai: str = "AI",
     text: str = "",
     clear_only: bool = False,
-) -> Path:
+    if_exists: bool = False,
+) -> Path | None:
     """Append the summary entry and remove the pending marker.
 
     If `text` is provided, it is appended as a new entry. If `clear_only` is
     True, only the marker is removed (useful when the AI already wrote the
-    entry itself).
+    entry itself). If `if_exists` is set and the context file does not exist,
+    this is a no-op returning None (used by global hooks).
     """
-    path = (context_path or get_context_path(create=True)).resolve()
+    base = context_path or get_context_path(create=not if_exists)
+    path = Path(base).resolve()
+    if if_exists and not path.exists():
+        return None
     marker = _pending_path(path)
 
     with locked(path, timeout=10.0):

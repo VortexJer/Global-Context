@@ -7,12 +7,66 @@ param(
     [string]$Repo = "VortexJer/Global-Context",
     [string]$Branch = "main",
     [string]$InstallDir = "$env:USERPROFILE\.globalcontext",
-    [string]$Ai = ""
+    [string]$Ai = "",
+    [switch]$Uninstall
 )
 
 $ErrorActionPreference = "Stop"
 
 $binDir = Join-Path $InstallDir "bin"
+
+# Resolve a Python launcher: py -3, then python, then python3.
+# ("python3" frequently does not exist on native Windows.)
+if (Get-Command py -ErrorAction SilentlyContinue) {
+    $pyExe = "py"; $pyPre = @("-3")
+} elseif (Get-Command python -ErrorAction SilentlyContinue) {
+    $pyExe = "python"; $pyPre = @()
+} else {
+    $pyExe = "python3"; $pyPre = @()
+}
+
+function Remove-GlobalContext {
+    param([string]$InstallDir, [string]$BinDir, [string]$PyExe, [string[]]$PyPre)
+
+    Write-Host "Uninstalling Global Context ..."
+
+    # 1. Remove AI integrations (Claude hooks, Kimi/Codex/Gemini skills).
+    $gc = Join-Path $BinDir "globalcontext.py"
+    if (Test-Path $gc) {
+        try { & $PyExe @PyPre $gc uninstall --ai all } catch { Write-Host "  (integration uninstall skipped: $_)" }
+    }
+
+    # 2. Remove the bin directory from the persistent user PATH.
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($userPath) {
+        $kept = ($userPath -split ';' | Where-Object { $_ -and ($_.TrimEnd('\') -ne $BinDir.TrimEnd('\')) })
+        [Environment]::SetEnvironmentVariable("Path", ($kept -join ';'), "User")
+        Write-Host "  Removed $BinDir from user PATH"
+    }
+
+    # 3. Remove the globalcontext function block from the PowerShell profile.
+    if (Test-Path $PROFILE) {
+        $content = Get-Content $PROFILE -Raw
+        $cleaned = [regex]::Replace($content, '(?ms)\r?\n?# Global Context\r?\nfunction globalcontext \{.*?\r?\n\}', '')
+        if ($cleaned -ne $content) {
+            Set-Content -Path $PROFILE -Value $cleaned -Encoding utf8
+            Write-Host "  Removed globalcontext function from $PROFILE"
+        }
+    }
+
+    # 4. Remove the install directory (keeps nothing behind).
+    if (Test-Path $InstallDir) {
+        Remove-Item -Recurse -Force $InstallDir
+        Write-Host "  Removed $InstallDir"
+    }
+
+    Write-Host "Global Context uninstalled. Restart your terminal to clear PATH."
+}
+
+if ($Uninstall) {
+    Remove-GlobalContext -InstallDir $InstallDir -BinDir $binDir -PyExe $pyExe -PyPre $pyPre
+    return
+}
 
 if (Get-Command git -ErrorAction SilentlyContinue) {
     Write-Host "Installing Global Context from https://github.com/$Repo ..."
@@ -51,7 +105,9 @@ if (-not (Test-Path $PROFILE) -or (Get-Content $PROFILE -Raw) -notlike "*# Globa
 
 # Global Context
 function globalcontext {
-    & python3 "$binDir\globalcontext.py" @args
+    if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 "$binDir\globalcontext.py" @args }
+    elseif (Get-Command python -ErrorAction SilentlyContinue) { & python "$binDir\globalcontext.py" @args }
+    else { & python3 "$binDir\globalcontext.py" @args }
 }
 "@ | Out-File -FilePath $PROFILE -Append -Encoding utf8
     Write-Host "Added globalcontext function to PowerShell profile: $PROFILE"
@@ -60,9 +116,9 @@ function globalcontext {
 # Run AI integrations setup
 $globalcontext = Join-Path $binDir "globalcontext.py"
 if ($Ai) {
-    & python3 $globalcontext install --ai $Ai
+    & $pyExe @pyPre $globalcontext install --ai $Ai
 } else {
-    & python3 $globalcontext install
+    & $pyExe @pyPre $globalcontext install
 }
 
 Write-Host ""

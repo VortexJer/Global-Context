@@ -1,4 +1,6 @@
 """Command-line interface for Global Context."""
+from __future__ import annotations
+
 import argparse
 import sys
 from pathlib import Path
@@ -49,7 +51,9 @@ def cmd_append(args):
 
 def cmd_checkpoint(args):
     ctx = Path(args.context) if args.context else None
-    marker = checkpoint(ctx, ai=args.ai, summary=args.summary or "")
+    marker = checkpoint(ctx, ai=args.ai, summary=args.summary or "", if_exists=args.if_exists)
+    if marker is None:
+        return  # no-op: --if-exists and no context file
     print(f"Checkpoint created: {marker}")
 
 
@@ -60,7 +64,10 @@ def cmd_checkpoint_complete(args):
         ai=args.ai,
         text=args.text or "",
         clear_only=args.clear_only,
+        if_exists=args.if_exists,
     )
+    if path is None:
+        return  # no-op: --if-exists and no context file
     if args.clear_only or not args.text:
         print(f"Checkpoint cleared: {path}")
     else:
@@ -82,6 +89,71 @@ def cmd_recover(args):
 def cmd_sync(args):
     """Manual sync placeholder. In the future this can parse current AI session files."""
     print("Manual sync: use 'globalcontext append <file> --label <AI>'.")
+
+
+def cmd_session_start(args):
+    """Emit SessionStart hook JSON for Claude Code (cross-platform, no bash).
+
+    Loads/creates the context file, recovers stale checkpoints, and prints a
+    JSON object with `hookSpecificOutput.additionalContext` so Claude Code
+    injects the shared context at session start. Never raises: on any error it
+    prints an empty JSON object so the session is not disrupted.
+    """
+    import json
+
+    try:
+        if args.context:
+            context_file = Path(args.context)
+            if not context_file.exists():
+                # Prefer legacy name if present in the same directory.
+                legacy = context_file.parent / ".ai-shared-context.md"
+                if legacy.exists():
+                    context_file = legacy
+        else:
+            context_file = find_context_file() or (Path.cwd() / DEFAULT_CONTEXT_NAME)
+
+        if not context_file.exists():
+            if not args.create:
+                # Global hook in a project without Global Context: stay inert.
+                print("{}")
+                return
+            context_file.parent.mkdir(parents=True, exist_ok=True)
+            from .utils import _default_header
+            context_file.write_text(_default_header(context_file.parent), encoding="utf-8")
+
+        # Consolidate any stale pending checkpoints before loading.
+        try:
+            recover(context_file)
+        except Exception:
+            pass
+
+        content = context_file.read_text(encoding="utf-8")
+        additional = (
+            "## Global Context\n\n"
+            "This project shares context across terminal AI assistants via "
+            f"`{context_file.name}`.\n\n"
+            "Current shared context:\n\n"
+            f"{content}\n\n"
+            "---\n\n"
+            "Instructions for this session:\n"
+            f"1. Read and remember the shared context above (file: `{context_file}`).\n"
+            "2. If the user names another project (e.g. 'open project X'), run "
+            "`globalcontext resolve <name-or-path>` and use that file instead.\n"
+            "3. After significant changes, append ONE concise entry prefixed `Claude:` "
+            "(3-8 bullets: what changed, key files, how to run/test, pending blockers). "
+            "It is a hand-off log, not a transcript.\n"
+            "4. Do not delete old entries unless asked."
+        )
+        output = {
+            "hookSpecificOutput": {
+                "hookEventName": "SessionStart",
+                "additionalContext": additional,
+            }
+        }
+        print(json.dumps(output))
+    except Exception:
+        # Never break the session on a hook error.
+        print("{}")
 
 
 def cmd_register(args):
@@ -144,6 +216,10 @@ def cmd_install(args):
         home_ctx.write_text(_default_global_header(), encoding="utf-8")
         print(f"Created global context: {home_ctx}")
 
+    if not results:
+        print("No integrations selected; nothing installed.", file=sys.stderr)
+        sys.exit(1)
+
     if all(r[1] for r in results):
         print("\nGlobal Context installed for selected AIs.")
     else:
@@ -180,7 +256,13 @@ def cmd_doctor(args):
 
 def _is_integration_installed(integration) -> bool:
     if isinstance(integration, ClaudeIntegration):
-        return (Path.home() / ".claude" / "plugins" / "globalcontext").exists()
+        settings = Path.home() / ".claude" / "settings.json"
+        if not settings.exists():
+            return False
+        try:
+            return "globalcontext" in settings.read_text(encoding="utf-8")
+        except OSError:
+            return False
     if isinstance(integration, KimiIntegration):
         return (Path.home() / ".kimi-code" / "skills" / "globalcontext").exists()
     if isinstance(integration, CodexIntegration):
@@ -266,18 +348,24 @@ def main(argv=None):
     p_checkpoint.add_argument("--context", help="Path to .globalcontext.md (default: active context)")
     p_checkpoint.add_argument("--ai", default="AI", help="AI assistant name, e.g. Claude, Kimi")
     p_checkpoint.add_argument("--summary", default="", help="Short summary of the planned update")
+    p_checkpoint.add_argument("--if-exists", action="store_true", help="Do nothing if the context file does not exist")
 
     p_checkpoint_complete = sub.add_parser("checkpoint-complete", help="Append summary and clear the pending checkpoint")
     p_checkpoint_complete.add_argument("--context", help="Path to .globalcontext.md (default: active context)")
     p_checkpoint_complete.add_argument("--ai", default="AI", help="AI assistant name, e.g. Claude, Kimi")
     p_checkpoint_complete.add_argument("--text", default="", help="Summary text to append as a new entry")
     p_checkpoint_complete.add_argument("--clear-only", action="store_true", help="Only remove the pending marker")
+    p_checkpoint_complete.add_argument("--if-exists", action="store_true", help="Do nothing if the context file does not exist")
 
     p_recover = sub.add_parser("recover", help="Consolidate stale pending checkpoints")
     p_recover.add_argument("--context", help="Path to .globalcontext.md (default: scan all known contexts)")
     p_recover.add_argument("--dry-run", action="store_true", help="Show what would be recovered without changing files")
 
     p_sync = sub.add_parser("sync", help="Manual sync helper")
+
+    p_session_start = sub.add_parser("session-start", help="Emit SessionStart hook JSON for Claude Code")
+    p_session_start.add_argument("--context", help="Path to .globalcontext.md (default: nearest)")
+    p_session_start.add_argument("--create", action="store_true", help="Create the context file if missing (default: stay inert)")
 
     p_register = sub.add_parser("register", help="Register a project name to a directory")
     p_register.add_argument("name", help="Friendly project name")
@@ -315,6 +403,7 @@ def main(argv=None):
         "checkpoint-complete": cmd_checkpoint_complete,
         "recover": cmd_recover,
         "sync": cmd_sync,
+        "session-start": cmd_session_start,
         "register": cmd_register,
         "unregister": cmd_unregister,
         "list": cmd_list,

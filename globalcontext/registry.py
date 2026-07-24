@@ -4,6 +4,8 @@ The registry maps friendly project names to project directories.
 The actual context file always lives inside the project directory as
 .globalcontext.md, so the context is tied to the project path.
 """
+from __future__ import annotations
+
 import json
 import re
 from pathlib import Path

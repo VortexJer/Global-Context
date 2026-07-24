@@ -181,6 +181,58 @@ append_entry('child', label='A', cwd=Path(r'{cwd}'))
         assert text.count("## A —") == 5
 
 
+def test_checkpoint_if_exists_is_noop_without_context():
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = Path(tmp) / ".globalcontext.md"  # does NOT exist
+        marker = checkpoint(ctx, ai="Claude", if_exists=True)
+        assert marker is None
+        assert not (Path(tmp) / ".globalcontext.md.pending").exists()
+        # And it must not have created the context file either.
+        assert not ctx.exists()
+
+
+def test_checkpoint_complete_if_exists_is_noop_without_context():
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = Path(tmp) / ".globalcontext.md"
+        assert checkpoint_complete(ctx, ai="Claude", clear_only=True, if_exists=True) is None
+        assert not ctx.exists()
+
+
+def test_strip_gc_hooks_removes_ours_keeps_foreign():
+    from globalcontext.integrations.claude import _strip_gc_hooks
+
+    settings = {
+        "model": "opus",
+        "hooks": {
+            "SessionStart": [
+                {"hooks": [
+                    {"type": "command", "command": '"C:/x/globalcontext.cmd" session-start'},
+                    {"type": "command", "command": "some-other-tool --foo"},
+                ]}
+            ],
+            "Stop": [
+                {"hooks": [{"type": "command", "command": "globalcontext checkpoint-complete"}]}
+            ],
+        },
+    }
+    changed = _strip_gc_hooks(settings)
+    assert changed is True
+    assert settings["model"] == "opus"                       # untouched
+    assert "globalcontext" not in json.dumps(settings)       # all ours gone
+    # The foreign SessionStart hook survives; the GC-only Stop event is removed.
+    assert "Stop" not in settings["hooks"]
+    cmds = [h["command"] for g in settings["hooks"]["SessionStart"] for h in g["hooks"]]
+    assert cmds == ["some-other-tool --foo"]
+
+
+def test_strip_gc_hooks_noop_when_none_present():
+    from globalcontext.integrations.claude import _strip_gc_hooks
+
+    settings = {"model": "opus", "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "x"}]}]}}
+    assert _strip_gc_hooks(settings) is False
+    assert settings["hooks"]["Stop"][0]["hooks"][0]["command"] == "x"
+
+
 if __name__ == "__main__":
     test_init_creates_context()
     test_find_context_walks_up()

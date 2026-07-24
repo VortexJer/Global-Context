@@ -12,7 +12,7 @@ When you switch from one AI to another, you lose the conversation thread. Global
 
 | AI | Integration type | Auto-load |
 |---|---|---|
-| Claude Code | Plugin with `SessionStart` hook | ✅ Yes |
+| Claude Code | Hooks in `~/.claude/settings.json` | ✅ Yes |
 | Kimi Code CLI | Skill (system prompt) | ✅ Yes |
 | OpenAI Codex CLI | Skill + prompt template | ✅ Yes |
 | Google Gemini CLI | Skill (system prompt) | ✅ Yes |
@@ -52,6 +52,28 @@ irm https://raw.githubusercontent.com/VortexJer/Global-Context/main/install.ps1 
 git clone https://github.com/VortexJer/Global-Context.git
 cd globalcontext
 ./install.sh --local
+```
+
+### Uninstall
+
+Removes everything the installer added — PATH entry, the shell/PowerShell
+function, the Claude hooks in `settings.json`, the Kimi/Codex/Gemini skills,
+and the install directory. Your other `settings.json` keys are preserved.
+
+```bash
+# macOS / Linux / Git Bash
+./install.sh --uninstall
+```
+
+```powershell
+# Windows PowerShell (the installer is copied into the install dir)
+& "$env:USERPROFILE\.globalcontext\install.ps1" -Uninstall
+```
+
+To remove only the AI integrations (and keep the CLI on PATH):
+
+```bash
+globalcontext uninstall --ai all
 ```
 
 ---
@@ -127,7 +149,7 @@ Global Context does **not** try to corrupt or rewrite internal AI session files.
 
 - Each project gets a `.globalcontext.md` file inside its own directory.
 - Projects can be registered with a friendly name (`globalcontext register <name> <path>`).
-- Claude Code loads the local context automatically via a `SessionStart` hook and can resolve named projects on request.
+- Claude Code loads the local context automatically via cross-platform hooks written to `~/.claude/settings.json` (`SessionStart` + a `checkpoint`/`Stop` marker lifecycle) and can resolve named projects on request. These hooks stay inert in projects that do not have a `.globalcontext.md`.
 - Kimi Code CLI loads the local context via a skill and can resolve named projects by running `globalcontext resolve <name>`.
 - Codex loads the local context via a skill and can resolve named projects the same way.
 - Gemini CLI loads the local context via a skill and can resolve named projects the same way.
@@ -178,12 +200,14 @@ Shared context for terminal AI assistants.
 
 Global Context now uses a **checkpoint/recover** mechanism so updates are not lost if a session is interrupted.
 
-| AI | Per-turn native save | Pending flag + recovery |
+| AI | Marker lifecycle | Pending flag + recovery |
 |---|---|---|
-| Claude Code | ✅ Yes — hooks create a `.globalcontext.pending` marker before each response and clear it on `Stop`. | ✅ Automatic on next `SessionStart` |
-| Kimi Code CLI | ⚠️ No native hook — skill instructs the model to checkpoint before/after each response. | ✅ Automatic on next session start |
-| OpenAI Codex CLI | ⚠️ No native hook — skill instructs the model to checkpoint before/after each response. | ✅ Automatic on next session start |
-| Google Gemini CLI | ⚠️ No native hook — skill instructs the model to checkpoint before/after each response. | ✅ Automatic on next session start |
+| Claude Code | ✅ Automated via hooks — a `.globalcontext.pending` marker is created before each response and cleared on `Stop`. | ✅ Automatic on next `SessionStart` |
+| Kimi Code CLI | ⚠️ No native hook — the skill instructs the model to checkpoint before/after each response. | ✅ Automatic on next session start |
+| OpenAI Codex CLI | ⚠️ No native hook — the skill instructs the model to checkpoint before/after each response. | ✅ Automatic on next session start |
+| Google Gemini CLI | ⚠️ No native hook — the skill instructs the model to checkpoint before/after each response. | ✅ Automatic on next session start |
+
+> **Note:** No AI writes the summary entry from a hook. The `.globalcontext.md` entry itself is always written by the model following the skill/plugin instructions. Hooks only manage the pending marker so an interrupted turn can be detected and recovered.
 
 How it works:
 

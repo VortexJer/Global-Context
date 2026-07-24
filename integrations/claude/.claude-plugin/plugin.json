@@ -1,5 +1,0 @@
-{
-  "name": "globalcontext",
-  "version": "0.1.0",
-  "description": "Auto-load and keep shared context with Kimi, Codex and other terminal AIs"
-}

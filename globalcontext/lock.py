@@ -50,7 +50,7 @@ def _lock_path(path: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def _acquire_filelock(path: Path, timeout: float) -> None:
+def _acquire_filelock(path: Path, timeout: float):
     lock_path = _lock_path(path)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock = FileLock(str(lock_path), timeout=timeout)
