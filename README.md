@@ -130,7 +130,10 @@ globalcontext resolve <name-or-path>   # Get/create the context file for a proje
 
 globalcontext install               # Install AI integrations (interactive)
 globalcontext install --ai all      # Install all integrations
-globalcontext doctor                # Check installation status
+globalcontext doctor                # Check installation status (shows enabled/disabled)
+
+globalcontext -d                    # Disable globally (hooks stay installed but inert)
+globalcontext -e                    # Re-enable  (aliases: globalcontext disable / enable)
 
 # Checkpoint / recover (reliable context updates)
 globalcontext checkpoint            # Mark a pending update before an AI response

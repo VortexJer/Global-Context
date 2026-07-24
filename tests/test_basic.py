@@ -225,6 +225,19 @@ def test_strip_gc_hooks_removes_ours_keeps_foreign():
     assert cmds == ["some-other-tool --foo"]
 
 
+def test_disable_enable_marker_toggle():
+    from unittest import mock
+    from globalcontext.utils import is_disabled, set_disabled
+
+    with tempfile.TemporaryDirectory() as home:
+        with mock.patch.object(Path, "home", staticmethod(lambda: Path(home))):
+            assert is_disabled() is False
+            set_disabled(True)
+            assert is_disabled() is True
+            set_disabled(False)
+            assert is_disabled() is False
+
+
 def test_strip_gc_hooks_noop_when_none_present():
     from globalcontext.integrations.claude import _strip_gc_hooks
 

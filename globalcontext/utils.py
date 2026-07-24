@@ -16,6 +16,27 @@ def globalcontext_home() -> Path:
     return home() / ".globalcontext"
 
 
+def _disabled_marker() -> Path:
+    """Path of the global on/off marker. Present => Global Context is disabled."""
+    return globalcontext_home() / "disabled"
+
+
+def is_disabled() -> bool:
+    """Return True if Global Context has been globally disabled."""
+    return _disabled_marker().exists()
+
+
+def set_disabled(disabled: bool) -> Path:
+    """Enable or disable Global Context globally by toggling the marker."""
+    marker = _disabled_marker()
+    if disabled:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("disabled\n", encoding="utf-8")
+    elif marker.exists():
+        marker.unlink()
+    return marker
+
+
 def now_str() -> str:
     """Return current UTC timestamp as a string."""
     from datetime import datetime, timezone

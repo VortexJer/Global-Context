@@ -13,7 +13,7 @@ from .integrations.codex import CodexIntegration
 from .integrations.gemini import GeminiIntegration
 from .integrations.kimi import KimiIntegration
 from .registry import create_project, list_projects, register, resolve, unregister
-from .utils import find_context_file, globalcontext_home, now_str
+from .utils import find_context_file, globalcontext_home, is_disabled, now_str, set_disabled
 
 
 INTEGRATIONS = [ClaudeIntegration(), KimiIntegration(), CodexIntegration(), GeminiIntegration()]
@@ -57,6 +57,8 @@ def cmd_append(args):
 
 
 def cmd_checkpoint(args):
+    if is_disabled():
+        return  # Global Context is disabled: hooks stay inert.
     ctx = Path(args.context) if args.context else None
     marker = checkpoint(ctx, ai=args.ai, summary=args.summary or "", if_exists=args.if_exists)
     if marker is None:
@@ -65,6 +67,8 @@ def cmd_checkpoint(args):
 
 
 def cmd_checkpoint_complete(args):
+    if is_disabled():
+        return  # Global Context is disabled: hooks stay inert.
     ctx = Path(args.context) if args.context else None
     path = checkpoint_complete(
         ctx,
@@ -107,6 +111,11 @@ def cmd_session_start(args):
     prints an empty JSON object so the session is not disrupted.
     """
     import json
+
+    if is_disabled():
+        # Global Context is disabled: inject nothing.
+        print("{}")
+        return
 
     try:
         if args.context:
@@ -250,8 +259,20 @@ def cmd_uninstall(args):
         print(f"[{status}] {integration.display_name}: {result.message}")
 
 
+def cmd_enable(args):
+    set_disabled(False)
+    print("Global Context enabled.")
+
+
+def cmd_disable(args):
+    set_disabled(True)
+    print("Global Context disabled. Hooks stay installed but inert.")
+    print("Re-enable with: globalcontext -e  (or 'globalcontext enable')")
+
+
 def cmd_doctor(args):
     print(f"Global Context {__version__}")
+    print(f"Status: {'DISABLED' if is_disabled() else 'enabled'}")
     print(f"GC home: {_gc_home()}")
     print(f"Active context: {find_context_file() or 'none'}")
     print("\nAI integrations:")
@@ -338,7 +359,10 @@ def main(argv=None):
         description="Share context across terminal AI coding assistants."
     )
     parser.add_argument("--version", action="version", version=f"globalcontext {__version__}")
-    sub = parser.add_subparsers(dest="cmd", required=True)
+    parser.add_argument("-e", "--enable", action="store_true", help="Enable Global Context")
+    parser.add_argument("-d", "--disable", action="store_true",
+                        help="Disable Global Context (hooks stay installed but inert)")
+    sub = parser.add_subparsers(dest="cmd", required=False)
 
     p_init = sub.add_parser("init", help="Initialize a context file in the current directory")
     p_init.add_argument("--dir", help="Target directory (default: current)")
@@ -400,7 +424,18 @@ def main(argv=None):
 
     p_doctor = sub.add_parser("doctor", help="Check Global Context installation")
 
+    sub.add_parser("enable", help="Enable Global Context")
+    sub.add_parser("disable", help="Disable Global Context (hooks stay installed but inert)")
+
     args = parser.parse_args(argv)
+
+    # Top-level -e/--enable and -d/--disable shortcuts.
+    if getattr(args, "enable", False) or args.cmd == "enable":
+        return cmd_enable(args)
+    if getattr(args, "disable", False) or args.cmd == "disable":
+        return cmd_disable(args)
+    if not args.cmd:
+        parser.error("a command is required (or use -e/--enable / -d/--disable)")
 
     commands = {
         "init": cmd_init,
